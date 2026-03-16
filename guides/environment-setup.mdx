@@ -1,0 +1,167 @@
+---
+title: "Environment setup"
+description: "Configure the environment variables required to run the Eventos API, including the database connection string and optional port override."
+---
+
+The Eventos API uses [`dotenv`](https://github.com/motdotla/dotenv) to load configuration from a `.env` file at startup. This keeps secrets out of source code and makes it easy to use different values across environments.
+
+## How configuration is loaded
+
+At the top of `index.js`, before any other application code runs, the `config()` call reads `.env` from the project root and populates `process.env`:
+
+```javascript index.js
+import { config } from 'dotenv'
+
+config()
+```
+
+Values defined in `.env` are then available throughout the application via `process.env.VARIABLE_NAME`. If a variable is set in the host environment (for example, on a cloud platform), it takes precedence over `.env`.
+
+## Environment variables
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `DATABASE_URL` | Yes | — | Full PostgreSQL connection string used by the `pg` connection pool. |
+| `PORT` | No | `3000` | Port the Express server listens on. |
+
+### `DATABASE_URL`
+
+This is the only required variable. It tells the `pg` connection pool how to reach your PostgreSQL database.
+
+**Format:**
+
+```
+postgresql://user:password@host:port/database
+```
+
+| Segment | Description |
+|---|---|
+| `user` | PostgreSQL username |
+| `password` | PostgreSQL password |
+| `host` | Hostname or IP address of the database server |
+| `port` | PostgreSQL port (default: `5432`) |
+| `database` | Name of the database containing the `Prueba` table |
+
+**Example:**
+
+```
+postgresql://eventos_user:s3cr3t@db.example.com:5432/eventos_db
+```
+
+### `PORT`
+
+Optional. The Express server defaults to port `3000` if this variable is not set:
+
+```javascript index.js
+const port = process.env.PORT || 3000;
+```
+
+Set this when port `3000` is already in use or when your hosting platform assigns a dynamic port.
+
+## Setting up the `.env` file
+
+<Steps>
+  <Step title="Create the .env file">
+    In the project root, create a file named `.env`:
+
+    <CodeGroup>
+
+    ```bash .env (minimum required)
+    DATABASE_URL=postgresql://user:password@host:5432/database
+    ```
+
+    ```bash .env (with custom port)
+    DATABASE_URL=postgresql://user:password@host:5432/database
+    PORT=4000
+    ```
+
+    </CodeGroup>
+
+    Replace the placeholder values with your actual database credentials.
+  </Step>
+
+  <Step title="Add .env to .gitignore">
+    Prevent your credentials from being committed to version control:
+
+    ```bash .gitignore
+    .env
+    ```
+
+    <Warning>
+      Never commit `.env` to version control. Doing so exposes your database credentials to anyone with access to the repository.
+    </Warning>
+  </Step>
+
+  <Step title="Start the server">
+    Run `npm start`. The `config()` call loads `.env` automatically — no additional flags are needed:
+
+    ```bash
+    npm start
+    ```
+  </Step>
+</Steps>
+
+## SSL requirement
+
+The connection pool is configured with `ssl: true`:
+
+```javascript index.js
+const pool = new pg.Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: true
+})
+```
+
+This means the API requires an encrypted connection to the database. Most managed PostgreSQL providers (such as Railway, Render, and Heroku) support and require SSL by default, so no additional configuration is needed for production.
+
+If you are connecting to a local PostgreSQL instance that does not have SSL configured, you will see a connection error. For local development only, you can disable the SSL requirement:
+
+```javascript index.js
+// Local development only — do not deploy this change
+const pool = new pg.Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: false
+})
+```
+
+<Warning>
+  Do not disable SSL in production. Always use encrypted connections to protect database credentials and participant data in transit.
+</Warning>
+
+## Setting environment variables on hosting platforms
+
+Cloud platforms read environment variables from their own configuration panels rather than a `.env` file. Set `DATABASE_URL` (and `PORT` if needed) using the platform's interface.
+
+<AccordionGroup>
+  <Accordion title="Railway">
+    1. Open your project in the [Railway dashboard](https://railway.app).
+    2. Select the service running the API.
+    3. Go to **Variables**.
+    4. Click **New Variable** and add `DATABASE_URL` with your connection string.
+
+    Railway also provides a managed PostgreSQL plugin. If you use it, Railway sets `DATABASE_URL` automatically in the same project.
+  </Accordion>
+
+  <Accordion title="Render">
+    1. Open your web service in the [Render dashboard](https://render.com).
+    2. Go to **Environment**.
+    3. Under **Environment Variables**, click **Add Environment Variable**.
+    4. Add `DATABASE_URL` and your connection string.
+
+    Render injects `PORT` automatically — do not set it manually, as Render assigns the port at runtime.
+  </Accordion>
+
+  <Accordion title="Heroku">
+    Use the Heroku CLI to set variables:
+
+    ```bash
+    heroku config:set DATABASE_URL=postgresql://user:password@host:5432/database --app your-app-name
+    ```
+
+    Or set them in the **Settings → Config Vars** section of the Heroku dashboard. Heroku also sets `PORT` automatically.
+  </Accordion>
+</AccordionGroup>
+
+<Tip>
+  On platforms that inject `PORT` automatically (Render, Heroku), do not override it. The `process.env.PORT || 3000` fallback in `index.js` handles both cases correctly.
+</Tip>

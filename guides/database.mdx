@@ -1,0 +1,169 @@
+---
+title: "Database"
+description: "How the Eventos API connects to PostgreSQL, the structure of the Prueba table, and how database errors are handled."
+---
+
+The Eventos API uses [node-postgres (`pg`)](https://node-postgres.com/) to connect to a PostgreSQL database. Participant records are stored in the `Prueba` table, which the API queries on every request to the `/lista` endpoint.
+
+## Connection pool setup
+
+The API creates a single `pg.Pool` instance when the application starts:
+
+```javascript index.js
+import pg from 'pg'
+
+const pool = new pg.Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: true
+})
+```
+
+The pool is initialized with two settings:
+
+| Setting | Value | Description |
+|---|---|---|
+| `connectionString` | `process.env.DATABASE_URL` | Full PostgreSQL connection string loaded from the environment. |
+| `ssl` | `true` | Enforces an encrypted connection to the database. |
+
+### Why use a pool
+
+A connection pool maintains a set of reusable database connections rather than opening and closing a new connection for every HTTP request. This has several practical benefits:
+
+- **Performance** — Reusing existing connections avoids the overhead of the TCP and SSL handshakes on every query.
+- **Reliability** — The pool automatically replaces a broken connection, so transient network issues do not take the server down.
+- **Concurrency** — Multiple simultaneous requests are handled using separate connections from the pool, rather than queuing behind a single connection.
+
+## DATABASE_URL connection string
+
+The pool reads the connection target from `DATABASE_URL`, which must be set in the environment before the server starts. See the [Environment setup](/guides/environment-setup) guide for full configuration instructions.
+
+**Format:**
+
+```
+postgresql://user:password@host:port/database
+```
+
+**Example:**
+
+```
+postgresql://eventos_user:s3cr3t@db.example.com:5432/eventos_db
+```
+
+## SSL enforcement
+
+The pool connects with `ssl: true`, which requires the PostgreSQL server to accept encrypted connections. Most managed cloud databases (Railway, Render, Heroku Postgres) support SSL by default.
+
+<Warning>
+  If your database does not support SSL, the pool will fail to connect and every request to `/lista` will return a `500` error. Make sure your PostgreSQL instance has SSL enabled before deploying.
+</Warning>
+
+For local development against a PostgreSQL instance without SSL, you can temporarily set `ssl: false` in the pool config. Revert this before deploying to production.
+
+## The `Prueba` table
+
+All participant data is stored in a table named `Prueba`. The API queries it with:
+
+```javascript index.js
+const getParticipantsQuery = 'SELECT * FROM Prueba';
+const participants = await pool.query(getParticipantsQuery);
+```
+
+The query returns every row and every column from the table. The rows are returned directly to the caller as a JSON array.
+
+### Suggested table schema
+
+The table schema is not defined in the application code, so you must create it manually in your PostgreSQL database. The following schema matches the response structure shown in the quickstart examples:
+
+```sql
+CREATE TABLE Prueba (
+    id     SERIAL PRIMARY KEY,
+    nombre VARCHAR(255) NOT NULL,
+    email  VARCHAR(255),
+    evento VARCHAR(255)
+);
+```
+
+| Column | Type | Description |
+|---|---|---|
+| `id` | `SERIAL` | Auto-incrementing primary key. |
+| `nombre` | `VARCHAR(255)` | Full name of the participant. |
+| `email` | `VARCHAR(255)` | Contact email address. |
+| `evento` | `VARCHAR(255)` | Name of the event the participant is registered for. |
+
+<Note>
+  The column names in your actual `Prueba` table determine the keys in the JSON response. The schema above matches the example response in the quickstart, but you can adjust it to fit your data model.
+</Note>
+
+### Adding test data
+
+Insert a few rows to verify the endpoint returns results:
+
+```sql
+INSERT INTO Prueba (nombre, email, evento) VALUES
+  ('Ana Torres', 'ana.torres@example.com', 'Congreso de Tecnología 2024'),
+  ('Luis Pérez', 'luis.perez@example.com', 'Congreso de Tecnología 2024');
+```
+
+Then query the API:
+
+```bash
+curl http://localhost:3000/lista
+```
+
+Expected response:
+
+```json
+[
+  {
+    "id": 1,
+    "nombre": "Ana Torres",
+    "email": "ana.torres@example.com",
+    "evento": "Congreso de Tecnología 2024"
+  },
+  {
+    "id": 2,
+    "nombre": "Luis Pérez",
+    "email": "luis.perez@example.com",
+    "evento": "Congreso de Tecnología 2024"
+  }
+]
+```
+
+## Error handling
+
+The `/lista` route wraps the database query in a `try/catch` block:
+
+```javascript index.js
+app.get('/lista', async(req, res) => {
+    try {
+        const getParticipantsQuery = 'SELECT * FROM Prueba';
+        const participants = await pool.query(getParticipantsQuery);
+        return res.status(200).json(participants.rows);
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ error: 'Error en el servidor' });
+    }
+});
+```
+
+If the query fails for any reason — connection refused, table not found, SSL handshake failure — the API returns:
+
+```json
+{ "error": "Error en el servidor" }
+```
+
+with a `500 Internal Server Error` status code. The full error is logged to the server console via `console.error(error)`, which is useful for debugging.
+
+**Common causes of a 500 response:**
+
+| Cause | Resolution |
+|---|---|
+| `DATABASE_URL` not set or malformed | Check your `.env` file or platform environment variables. |
+| Database server unreachable | Verify the host, port, and network access rules. |
+| SSL handshake failure | Confirm the database server has SSL enabled. |
+| `Prueba` table does not exist | Create the table using the schema above. |
+| Incorrect credentials | Double-check the username and password in `DATABASE_URL`. |
+
+<Tip>
+  When debugging a `500` error, check the server console output first. The `console.error(error)` call logs the full `pg` error message, which identifies the exact cause (for example, `relation "Prueba" does not exist` or `SSL connection is required`).
+</Tip>

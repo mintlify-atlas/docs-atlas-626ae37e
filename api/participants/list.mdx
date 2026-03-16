@@ -1,0 +1,158 @@
+---
+title: "List participants"
+description: "Returns all participant rows from the Prueba table as a JSON array."
+---
+
+`GET /lista`
+
+Returns all rows from the `Prueba` table. Each row represents a registered participant with their name, email address, and associated event.
+
+<Info>
+  This endpoint returns all participants without pagination or filtering. For large datasets, expect the full table to be returned in a single response.
+</Info>
+
+## Authentication
+
+None. This endpoint does not require any authentication headers or tokens.
+
+## CORS origin restriction
+
+<Warning>
+  Browser requests are only allowed from `https://eventosutmach.000webhostapp.com`. Requests from other browser origins will be blocked before reaching this endpoint. Non-browser clients (curl, server-side code) are unaffected.
+</Warning>
+
+## Request
+
+### Path parameters
+
+This endpoint has no path parameters.
+
+### Query parameters
+
+This endpoint accepts no query parameters.
+
+<ParamField path="(none)" type="">
+  No parameters are accepted. Send a plain GET request to `/lista` with no query string or body.
+</ParamField>
+
+### Request body
+
+This endpoint does not accept a request body.
+
+## Response
+
+### 200 OK
+
+Returns a JSON array of participant objects. Each element in the array represents one row from the `Prueba` table.
+
+<ResponseField name="[]" type="object[]">
+  Array of participant objects.
+
+  <Expandable title="properties" defaultOpen={true}>
+    <ResponseField name="id" type="number" required>
+      Unique numeric identifier for the participant record.
+    </ResponseField>
+
+    <ResponseField name="nombre" type="string" required>
+      Full name of the participant.
+    </ResponseField>
+
+    <ResponseField name="correo" type="string" required>
+      Email address of the participant.
+    </ResponseField>
+
+    <ResponseField name="evento" type="string" required>
+      Name of the event the participant is registered for.
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+### 500 Internal Server Error
+
+Returned when a database error occurs (e.g., the connection to PostgreSQL fails or the query cannot be executed).
+
+<ResponseField name="error" type="string">
+  Human-readable error message. Always `"Error en el servidor"` for server-side failures.
+</ResponseField>
+
+## Examples
+
+### Request examples
+
+<CodeGroup>
+
+```bash curl
+curl --request GET \
+  --url http://localhost:3000/lista \
+  --header 'Accept: application/json'
+```
+
+```javascript JavaScript (fetch)
+const response = await fetch('http://localhost:3000/lista', {
+  method: 'GET',
+  headers: {
+    'Accept': 'application/json',
+  },
+});
+
+if (!response.ok) {
+  const error = await response.json();
+  throw new Error(error.error);
+}
+
+const participants = await response.json();
+console.log(participants);
+```
+
+```python Python (requests)
+import requests
+
+response = requests.get(
+    'http://localhost:3000/lista',
+    headers={'Accept': 'application/json'},
+)
+
+if response.status_code == 200:
+    participants = response.json()
+    print(participants)
+else:
+    error = response.json()
+    print(f"Error: {error['error']}")
+```
+
+</CodeGroup>
+
+### Response examples
+
+#### 200 OK
+
+```json
+[
+  {
+    "id": 1,
+    "nombre": "Ana García",
+    "correo": "ana.garcia@example.com",
+    "evento": "Conferencia de Innovación 2026"
+  },
+  {
+    "id": 2,
+    "nombre": "Carlos Mendoza",
+    "correo": "carlos.mendoza@example.com",
+    "evento": "Taller de Emprendimiento"
+  },
+  {
+    "id": 3,
+    "nombre": "María López",
+    "correo": "maria.lopez@example.com",
+    "evento": "Conferencia de Innovación 2026"
+  }
+]
+```
+
+#### 500 Internal Server Error
+
+```json
+{
+  "error": "Error en el servidor"
+}
+```

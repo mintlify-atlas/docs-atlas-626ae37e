@@ -1,0 +1,129 @@
+---
+title: "Authentication"
+description: "How the Eventos API controls access using CORS, and recommendations for adding authentication in the future."
+---
+
+The Eventos API does not implement token-based authentication. Access control is handled entirely through Cross-Origin Resource Sharing (CORS) headers, which restrict which browser origins can call the API.
+
+## Current access control model
+
+The API uses a strict CORS policy as its only access control mechanism. There are no API keys, session tokens, or JWTs required to make requests. Any HTTP client that can reach the server can query the `/lista` endpoint — the CORS restriction only applies to browser-based requests.
+
+```javascript index.js
+const allowedOrigin = 'https://eventosutmach.000webhostapp.com';
+app.use(cors({ origin: allowedOrigin }));
+```
+
+The `cors` middleware reads the `Origin` header of incoming requests and compares it against `allowedOrigin`. If they match, the response includes the `Access-Control-Allow-Origin` header set to that origin. If they do not match, the browser blocks the response before your JavaScript code can read it.
+
+<Note>
+  CORS is enforced by the browser, not by the server. The server processes every request regardless of its origin and only the response headers differ. Tools like `curl`, Postman, and server-to-server requests are not subject to CORS and can call the API freely.
+</Note>
+
+## What this means for consumers
+
+<CardGroup cols={2}>
+  <Card title="Authorized browser client" icon="globe">
+    The front-end at `https://eventosutmach.000webhostapp.com` can call the API directly from a browser. The CORS headers are present and the browser allows the response.
+  </Card>
+  <Card title="Other browser origins" icon="ban">
+    Any other origin — including `http://localhost` during development — will receive a CORS error in the browser console and the response will be blocked.
+  </Card>
+  <Card title="curl and Postman" icon="terminal">
+    Command-line tools and API clients are not subject to CORS. They can reach the API from any machine that has network access to the server.
+  </Card>
+  <Card title="Server-to-server requests" icon="server">
+    Back-end services calling the API over HTTP are unaffected by CORS. Only browser-initiated requests are restricted.
+  </Card>
+</CardGroup>
+
+## Testing the API with curl
+
+Because `curl` operates outside the browser sandbox, it bypasses CORS entirely. Use it to test the API during development regardless of your network origin.
+
+<Steps>
+  <Step title="Send a GET request to /lista">
+    ```bash
+    curl -X GET http://localhost:3000/lista
+    ```
+  </Step>
+
+  <Step title="Check the response headers">
+    Pass `-i` to include response headers in the output. This is useful for confirming the `Access-Control-Allow-Origin` header is present when you simulate a browser request by adding an `Origin` header:
+
+    ```bash
+    curl -i -H "Origin: https://eventosutmach.000webhostapp.com" http://localhost:3000/lista
+    ```
+
+    The response should include:
+
+    ```
+    Access-Control-Allow-Origin: https://eventosutmach.000webhostapp.com
+    ```
+  </Step>
+
+  <Step title="Test with a disallowed origin">
+    Sending a request with an origin that is not in the allowlist returns a response without `Access-Control-Allow-Origin`. A browser would block this, but `curl` still returns the body:
+
+    ```bash
+    curl -i -H "Origin: https://example.com" http://localhost:3000/lista
+    ```
+
+    The `Access-Control-Allow-Origin` header will be absent from the response headers.
+  </Step>
+</Steps>
+
+## Recommendations for adding authentication
+
+If the API needs to serve multiple clients, protect sensitive data, or restrict writes to authorized users, CORS alone is insufficient. Below are two common approaches.
+
+<AccordionGroup>
+  <Accordion title="API keys">
+    API keys are simple shared secrets included in every request, typically as a header:
+
+    ```bash
+    curl -H "X-API-Key: your-secret-key" http://localhost:3000/lista
+    ```
+
+    **Implementation outline:**
+
+    1. Generate a secret key and store it securely (environment variable or secrets manager).
+    2. Add an Express middleware that reads the `X-API-Key` header and rejects requests with a `401` if it does not match.
+    3. Share the key only with trusted consumers.
+
+    ```javascript index.js
+    // Example middleware — adapt for production use
+    app.use((req, res, next) => {
+      const key = req.headers['x-api-key'];
+      if (key !== process.env.API_KEY) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      next();
+    });
+    ```
+
+    <Warning>
+      API keys in request headers are visible in server logs and browser network panels. Always use HTTPS to prevent interception.
+    </Warning>
+  </Accordion>
+
+  <Accordion title="JSON Web Tokens (JWT)">
+    JWTs are signed tokens issued after a login step. They are better suited for user-facing authentication where different callers may have different permissions.
+
+    **Implementation outline:**
+
+    1. Add a `POST /login` endpoint that validates credentials and returns a signed JWT using a library such as `jsonwebtoken`.
+    2. Protect routes with a middleware that verifies the token from the `Authorization: Bearer <token>` header.
+    3. Encode any relevant claims (user ID, role) in the token payload.
+
+    ```bash
+    curl -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5..." http://localhost:3000/lista
+    ```
+
+    JWTs have a built-in expiry (`exp` claim), making them easier to rotate than static API keys.
+  </Accordion>
+</AccordionGroup>
+
+<Tip>
+  Start with API keys if you only need to protect the API from unauthorized server-to-server callers. Adopt JWTs when you need per-user identity, roles, or token expiry.
+</Tip>

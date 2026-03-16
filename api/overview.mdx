@@ -1,0 +1,123 @@
+---
+title: "API overview"
+description: "Overview of the Eventos REST API: base URL, content type, authentication, CORS policy, available endpoints, and error handling."
+---
+
+The Eventos API is a REST API for managing and listing event participants. It is built with Node.js and Express, and backed by a PostgreSQL database.
+
+<CardGroup cols={2}>
+  <Card title="List participants" icon="list" href="/api/participants/list">
+    Retrieve all participants registered in the system.
+  </Card>
+  <Card title="Source code" icon="code" href="https://github.com">
+    View the full source code for the API server.
+  </Card>
+</CardGroup>
+
+## Base URL
+
+When running locally, all requests are made to:
+
+```
+http://localhost:3000
+```
+
+When deployed, replace this with your production host. All endpoint paths are relative to the base URL.
+
+<Note>
+  This documentation uses `http://localhost:3000` in all examples. If you are testing against the production deployment, substitute the appropriate host. The CORS policy differs between environments — see [CORS policy](#cors-policy) below.
+</Note>
+
+## Content type
+
+All responses are returned as JSON. Set the `Content-Type` header to `application/json` when sending request bodies (none of the current endpoints require a body).
+
+| Header         | Value              |
+| -------------- | ------------------ |
+| `Content-Type` | `application/json` |
+| `Accept`       | `application/json` |
+
+## Authentication
+
+<Info>
+  The Eventos API does not use token-based or session-based authentication. Access control is enforced exclusively through CORS origin restrictions for browser clients.
+</Info>
+
+There are no `Authorization` headers, API keys, or login flows required. Any HTTP client that can reach the server — such as `curl`, Postman, or a server-side process — can call all endpoints without credentials.
+
+Browser-based clients are subject to the CORS policy described below.
+
+## CORS policy
+
+<Warning>
+  Browser requests from origins other than `https://eventosutmach.000webhostapp.com` will be blocked by CORS. This restriction does not apply to non-browser clients such as `curl` or server-side code.
+</Warning>
+
+The API allows cross-origin requests only from the following origin:
+
+```
+https://eventosutmach.000webhostapp.com
+```
+
+Requests from any other browser origin will receive a CORS error before reaching the server. This is configured using the `cors` middleware with an explicit `origin` allowlist.
+
+## Available endpoints
+
+| Method | Path     | Description                                      |
+| ------ | -------- | ------------------------------------------------ |
+| `GET`  | `/lista` | Returns all participant rows from the `Prueba` table. |
+
+## HTTP status codes
+
+The API uses the following HTTP status codes:
+
+| Status code | Meaning               | When it is returned                                         |
+| ----------- | --------------------- | ----------------------------------------------------------- |
+| `200 OK`    | Success               | The request was handled successfully and data is returned.  |
+| `500 Internal Server Error` | Server error | A database query or other server-side error occurred. |
+
+## Error response format
+
+When the server encounters an error (status `500`), it returns a JSON object with an `error` field:
+
+```json
+{
+  "error": "Error en el servidor"
+}
+```
+
+There is currently only one error message. Specific error details are logged to the server console but are not exposed in the response body.
+
+## Making requests
+
+### curl
+
+You can call the API directly from the command line without any special headers:
+
+```bash
+curl http://localhost:3000/lista
+```
+
+### fetch (browser)
+
+Browser requests work only when called from the allowed origin (`https://eventosutmach.000webhostapp.com`). From that origin:
+
+```javascript
+const response = await fetch('http://localhost:3000/lista');
+const participants = await response.json();
+console.log(participants);
+```
+
+If you call this from any other origin in a browser, the request will be blocked with a CORS error.
+
+### Server-side fetch (Node.js)
+
+Server-to-server requests are not subject to CORS restrictions:
+
+```javascript
+import fetch from 'node-fetch';
+
+const response = await fetch('http://localhost:3000/lista');
+const participants = await response.json();
+console.log(participants);
+```
