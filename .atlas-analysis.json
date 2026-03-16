@@ -1,0 +1,45 @@
+{
+  "projectType": "api-service",
+  "projectName": "Eventos",
+  "projectDescription": "A Node.js/Express REST API for managing and listing event participants, backed by a PostgreSQL database.",
+  "theme": "sequoia",
+  "primaryColor": "#2563EB",
+  "lightColor": "#EFF6FF",
+  "darkColor": "#1E3A5F",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": ["introduction", "quickstart"]
+          },
+          {
+            "group": "Guides",
+            "pages": ["guides/authentication", "guides/environment-setup", "guides/database"]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Participants",
+            "pages": ["api/overview", "api/participants/list"]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "List event participants via REST endpoint",
+    "PostgreSQL database integration",
+    "CORS restricted to the official events frontend",
+    "Environment-based configuration with dotenv",
+    "SSL-secured database connection"
+  ],
+  "publicApiSurface": [
+    "GET /lista — Returns all participants from the database"
+  ]
+}
